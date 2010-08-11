@@ -7,11 +7,12 @@ views in any other way is generally not advised.
 import os
 import django.views.static
 from django.conf import settings
-from django.db import connection
 from django.http import HttpResponseBadRequest
 from django.shortcuts import render_to_response
 from django.utils import simplejson
 from django.utils.hashcompat import sha_constructor
+
+from debug_toolbar.utils.db import connections
 
 class InvalidSQLError(Exception):
     def __init__(self, value):
@@ -31,12 +32,14 @@ def sql_select(request):
     Returns the output of the SQL SELECT statement.
 
     Expected GET variables:
+        db: database connection alias
         sql: urlencoded sql with positional arguments
         params: JSON encoded parameter values
         duration: time for SQL to execute passed in from toolbar just for redisplay
         hash: the hash of (secret + sql + params) for tamper checking
     """
     from debug_toolbar.panels.sql import reformat_sql
+    db = request.GET.get('db', 'default')
     sql = request.GET.get('sql', '')
     params = request.GET.get('params', '')
     hash = sha_constructor(settings.SECRET_KEY + sql + params).hexdigest()
@@ -44,7 +47,7 @@ def sql_select(request):
         return HttpResponseBadRequest('Tamper alert') # SQL Tampering alert
     if sql.lower().strip().startswith('select'):
         params = simplejson.loads(params)
-        cursor = connection.cursor()
+        cursor = connections[db].cursor()
         cursor.execute(sql, params)
         headers = [d[0] for d in cursor.description]
         result = cursor.fetchall()
@@ -63,12 +66,14 @@ def sql_explain(request):
     Returns the output of the SQL EXPLAIN on the given query.
 
     Expected GET variables:
+        db: database connection alias
         sql: urlencoded sql with positional arguments
         params: JSON encoded parameter values
         duration: time for SQL to execute passed in from toolbar just for redisplay
         hash: the hash of (secret + sql + params) for tamper checking
     """
     from debug_toolbar.panels.sql import reformat_sql
+    db = request.GET.get('db', 'default')
     sql = request.GET.get('sql', '')
     params = request.GET.get('params', '')
     hash = sha_constructor(settings.SECRET_KEY + sql + params).hexdigest()
@@ -76,7 +81,7 @@ def sql_explain(request):
         return HttpResponseBadRequest('Tamper alert') # SQL Tampering alert
     if sql.lower().strip().startswith('select'):
         params = simplejson.loads(params)
-        cursor = connection.cursor()
+        cursor = connections[db].cursor()
 
         if settings.DATABASE_ENGINE == "sqlite3":
             # SQLite's EXPLAIN dumps the low-level opcodes generated for a query;
@@ -103,12 +108,14 @@ def sql_profile(request):
     Returns the output of running the SQL and getting the profiling statistics.
 
     Expected GET variables:
+        db: database connection alias
         sql: urlencoded sql with positional arguments
         params: JSON encoded parameter values
         duration: time for SQL to execute passed in from toolbar just for redisplay
         hash: the hash of (secret + sql + params) for tamper checking
     """
     from debug_toolbar.panels.sql import reformat_sql
+    db = request.GET.get('db', 'default')
     sql = request.GET.get('sql', '')
     params = request.GET.get('params', '')
     hash = sha_constructor(settings.SECRET_KEY + sql + params).hexdigest()
@@ -116,7 +123,7 @@ def sql_profile(request):
         return HttpResponseBadRequest('Tamper alert') # SQL Tampering alert
     if sql.lower().strip().startswith('select'):
         params = simplejson.loads(params)
-        cursor = connection.cursor()
+        cursor = connections[db].cursor()
         result = None
         headers = None
         result_error = None

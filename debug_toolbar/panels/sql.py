@@ -6,7 +6,6 @@ import traceback
 
 import django
 from django.conf import settings
-from django.db import connection
 from django.db.backends import util
 from django.views.debug import linebreak_iter
 from django.template import Node
@@ -18,6 +17,7 @@ from django.utils.translation import ugettext_lazy as _
 
 from debug_toolbar.panels import DebugPanel
 from debug_toolbar.utils import sqlparse
+from debug_toolbar.utils.db import connections
 
 # Figure out some paths
 django_path = os.path.realpath(os.path.dirname(django.__file__))
@@ -116,6 +116,7 @@ class DatabaseStatTracker(util.CursorDebugWrapper):
             # We keep `sql` to maintain backwards compatibility
             self.db.queries.append({
                 'sql': self.db.ops.last_executed_query(self.cursor, sql, params),
+                'alias': getattr(self.db, 'alias', 'default'),
                 'duration': duration,
                 'raw_sql': sql,
                 'params': _params,
@@ -139,7 +140,11 @@ class SQLDebugPanel(DebugPanel):
 
     def __init__(self, *args, **kwargs):
         super(self.__class__, self).__init__(*args, **kwargs)
-        self._offset = len(connection.queries)
+        # Get offsets by db alias
+        self._offsets = dict([
+            (alias, len(conn.queries))
+            for alias, conn in connections._connections.items()
+        ])
         self._sql_time = 0
         self._queries = []
 
@@ -147,7 +152,12 @@ class SQLDebugPanel(DebugPanel):
         return _('SQL')
 
     def nav_subtitle(self):
-        self._queries = connection.queries[self._offset:]
+        # Get new queries by db alias
+        for alias, conn in connections._connections.items():
+            offset = self._offsets.get(alias, 0)
+            for q in conn.queries[offset:]:
+                self._queries.append(q)
+        
         self._sql_time = sum([q['duration'] for q in self._queries])
         num_queries = len(self._queries)
         # TODO l10n: use ngettext
