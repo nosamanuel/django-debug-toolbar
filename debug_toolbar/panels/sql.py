@@ -117,7 +117,7 @@ class DatabaseStatTracker(util.CursorDebugWrapper):
             alias = getattr(self.db, 'alias', 'default')
             try:
                 is_mysql = settings.DATABASES[alias]['ENGINE'].endswith('mysql')
-            except AttributeError, KeyError:
+            except (AttributeError, KeyError):
                 is_mysql = settings.DATABASE_ENGINE.endswith('mysql')
             
             # We keep `sql` to maintain backwards compatibility
