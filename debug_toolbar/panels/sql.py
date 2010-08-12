@@ -112,11 +112,18 @@ class DatabaseStatTracker(util.CursorDebugWrapper):
             except:
                 pass
             del cur_frame
-
+            
+            # Get the alias and engine of the current database
+            alias = getattr(self.db, 'alias', 'default')
+            try:
+                is_mysql = settings.DATABASES[alias]['ENGINE'].endswith('mysql')
+            except AttributeError, KeyError:
+                is_mysql = settings.DATABASE_ENGINE.endswith('mysql')
+            
             # We keep `sql` to maintain backwards compatibility
             self.db.queries.append({
                 'sql': self.db.ops.last_executed_query(self.cursor, sql, params),
-                'alias': getattr(self.db, 'alias', 'default'),
+                'alias': alias,
                 'duration': duration,
                 'raw_sql': sql,
                 'params': _params,
@@ -127,6 +134,7 @@ class DatabaseStatTracker(util.CursorDebugWrapper):
                 'is_slow': (duration > SQL_WARNING_THRESHOLD),
                 'is_select': sql.lower().strip().startswith('select'),
                 'template_info': template_info,
+                'is_mysql': is_mysql,
             })
 util.CursorDebugWrapper = DatabaseStatTracker
 
@@ -188,7 +196,6 @@ class SQLDebugPanel(DebugPanel):
         context.update({
             'queries': self._queries,
             'sql_time': self._sql_time,
-            'is_mysql': settings.DATABASE_ENGINE == 'mysql',
         })
 
         return render_to_string('debug_toolbar/panels/sql.html', context)
